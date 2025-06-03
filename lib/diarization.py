@@ -29,36 +29,6 @@ class DiarizationPostProcessor:
         self.MIN_SEGMENT_DURATION = 1.0
         self.labels = None
 
-    def process(self, diarization, embeddings):
-        print('post-processing diarization...')
-        # create a new label generator
-        self.labels = SpeakerLabelGenerator()
-
-        # process the diarization
-        clean_segments = self.clean_segments(diarization)
-        merged_segments = self.merge_segments(clean_segments)
-        emb_segments = self.segment_embeddings(merged_segments, embeddings)
-
-        # create the speaker embeddings
-        speaker_embeddings = self.create_speaker_embeddings(emb_segments)
-        speaker_count = self.labels.count
-        speaker_labels = self.labels.get_all()
-        speaker_emb_map = {}
-        for label in speaker_labels:
-            speaker_emb_map[label] = speaker_embeddings[label].tolist()
-
-        # create the final output
-        segments = self.format_segments(emb_segments)
-        # segments = self.format_segments_extra(emb_segments, speaker_embeddings)
-        return {
-            "segments": segments,
-            "speakers": {
-                "count": speaker_count,
-                "labels": speaker_labels,
-                "embeddings": speaker_emb_map,
-            },
-        }
-
     def empty_result(self):
         return {
             "segments": [],
@@ -69,18 +39,46 @@ class DiarizationPostProcessor:
             },
         }
 
-    def clean_segments(self, diarization):
+    def process_v3(self, diarization):
+        """
+        处理 pyannote 3.x 版本的 diarization 结果
+        这个版本不需要单独的 embeddings 参数
+        """
+        print('正在后处理分离结果...')
+        # 创建新的标签生成器
+        self.labels = SpeakerLabelGenerator()
+
+        # 处理分离结果
+        clean_segments = self.clean_segments_v3(diarization)
+        merged_segments = self.merge_segments(clean_segments)
+
+        # 创建最终输出
+        segments = self.format_segments(merged_segments)
+        speaker_count = self.labels.count
+        speaker_labels = self.labels.get_all()
+        
+        return {
+            "segments": segments,
+            "speakers": {
+                "count": speaker_count,
+                "labels": speaker_labels,
+                "embeddings": {},  # v3 版本暂时不提供 embeddings
+            },
+        }
+
+    def clean_segments_v3(self, diarization):
+        """为 v3 版本清理分段，不需要 embeddings"""
         speaker_time = collections.defaultdict(float)
         total_time = 0.0
         for segment, _, speaker in diarization.itertracks(yield_label=True):
-            # filter out segments that are too short
+            # 过滤掉太短的分段
             if segment.duration < self.MIN_SEGMENT_DURATION:
                 continue
             speaker_time[speaker] += segment.duration
             total_time += segment.duration
 
-        # filter out speakers that have spoken too little
-        # (these are likely overlaps misclassified as separate speakers)
+        # 过滤掉说话时间太少的说话人
+        # (这些可能是重叠部分被误分类为独立说话人)
         speakers = set([
             speaker
             for speaker, time in speaker_time.items()
@@ -95,7 +93,6 @@ class DiarizationPostProcessor:
                 "speaker": self.labels.get(speaker),
                 "start": segment.start,
                 "stop": segment.end,
-                "embeddings": np.empty((0, 192)),
             })
         return segments
 
@@ -113,51 +110,6 @@ class DiarizationPostProcessor:
             merged.append(segment)
         return merged
 
-    def segment_embeddings(self, merged_segments, embeddings):
-        # process the embeddings
-        for i, chunk in enumerate(embeddings['data']):
-            # chunk shape: (local_num_speakers, dimension)
-            speakers = []
-            for speaker_embedding in chunk:
-                if not np.all(np.isnan(speaker_embedding)):
-                    speakers.append(speaker_embedding)
-            if len(speakers) != 1:
-                # ignore this chunk
-                continue
-            # now we have a single speaker for this chunk
-            speaker = speakers[0]
-
-            # find the segment that this chunk belongs to
-            chunk_start = i * embeddings['chunk_offset']
-            chunk_end = chunk_start + embeddings['chunk_duration']
-
-            for segment in merged_segments:
-                if (segment['start'] <= chunk_start) and (chunk_end <= segment['stop']):
-                    # this is the segment we're looking for
-                    segment['embeddings'] = np.append(
-                        segment['embeddings'],
-                        [speaker],
-                        axis=0,
-                    )
-                    break
-        return merged_segments
-
-    def create_speaker_embeddings(self, emb_segments):
-        speaker_embeddings = collections.defaultdict(
-            lambda: np.empty((0, 192)))
-
-        for segment in emb_segments:
-            if segment["embeddings"].size == 0:
-                continue
-            speaker_embeddings[segment["speaker"]] = np.vstack([
-                speaker_embeddings[segment["speaker"]],
-                segment["embeddings"],
-            ])
-        for speaker in speaker_embeddings:
-            speaker_embeddings[speaker] = speaker_embeddings[speaker].mean(
-                axis=0)
-        return speaker_embeddings
-
     def format_segments(self, emb_segments):
         def format_ts(ts):
             return str(datetime.timedelta(seconds=ts))
@@ -168,34 +120,5 @@ class DiarizationPostProcessor:
                 "speaker": segment["speaker"],
                 "start": format_ts(segment["start"]),
                 "stop": format_ts(segment["stop"]),
-            })
-        return segments
-
-    def format_segments_extra(self, emb_segments, speaker_embeddings):
-        from sklearn.metrics.pairwise import cosine_distances
-
-        def format_ts(ts):
-            return str(datetime.timedelta(seconds=ts))
-
-        def get_mean(embeddings):
-            if len(embeddings) == 0:
-                return None
-            return embeddings.mean(axis=0)
-
-        def dist(embedding, label):
-            if embedding is None:
-                return None
-            ref = speaker_embeddings[label].reshape(1, -1)
-            current = embedding.reshape(1, -1)
-            return cosine_distances(ref, current)[0][0]
-
-        segments = []
-        for segment in emb_segments:
-            embedding = get_mean(segment["embeddings"])
-            segments.append({
-                "speaker": segment["speaker"],
-                "start": format_ts(segment["start"]),
-                "stop": format_ts(segment["stop"]),
-                "edist": dict((label, dist(embedding, label)) for label in self.labels.get_all()),
             })
         return segments

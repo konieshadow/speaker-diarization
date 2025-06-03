@@ -3,17 +3,18 @@ build:
 
   system_packages:
     - 'ffmpeg'
-    - 'libsndfile1'
 
   python_version: '3.10'
 
-  python_packages:
-    - 'ffmpeg-python==0.2.0'
-    - 'torch==2.5.1'
-    - 'torchvision==0.20.1'
-    - 'torchaudio==2.5.1'
-    - 'pyannote.audio==3.3.1'
+  python_requirements: 'requirements.txt'
+  
+  run:
+    - command: python -c "import os; from huggingface_hub import snapshot_download; token = open('/tmp/hf_token').read().strip() if os.path.exists('/tmp/hf_token') else None; snapshot_download(repo_id='pyannote/speaker-diarization-3.1', token=token); snapshot_download(repo_id='pyannote/segmentation-3.0', token=token); print('Models downloaded successfully')" && mkdir -p /app && cp /tmp/hf_token /app/hf_token
+      mounts:
+        - type: secret
+          id: hf_token
+          target: /tmp/hf_token
     
-image: 'r8.im/meronym/speaker-diarization'
+image: 'r8.im/konieshadow/speaker-diarization'
 
 predict: 'predict.py:Predictor' 

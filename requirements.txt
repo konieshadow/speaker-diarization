@@ -1,0 +1,6 @@
+static-ffmpeg==2.5
+torch==2.5.1
+torchaudio==2.5.1
+pyannote.audio>=3.3.2
+huggingface_hub>=0.20.0
+pyyaml>=6.0

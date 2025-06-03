@@ -1,0 +1,3 @@
+echo 'hf_XXX' > /root/hf_token.secret
+
+cog build --secret id=hf_token,src=/root/hf_token.secret

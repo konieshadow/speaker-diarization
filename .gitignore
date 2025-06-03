@@ -25,3 +25,7 @@ venv.bak/
 
 # VSCode
 .vscode/
+output.json
+simple_result.json
+
+.cog/

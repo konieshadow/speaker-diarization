@@ -1,8 +1,9 @@
 import pathlib
 import os
 import tempfile
+import subprocess
 
-import ffmpeg
+import static_ffmpeg
 
 
 class AudioPreProcessor:
@@ -12,15 +13,32 @@ class AudioPreProcessor:
         self.error = None
 
     def process(self, audio_file):
-        # converts audio file to 16kHz 16bit mono wav...
+        # converts audio file to 16kHz 16bit mono wav using static-ffmpeg...
         print('pre-processing audio file...')
-        stream = ffmpeg.input(audio_file, vn=None, hide_banner=None)
-        stream = stream.output(self.output_path, format='wav',
-                               acodec='pcm_s16le', ac=1, ar='16k').overwrite_output()
+        
         try:
-            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
-        except ffmpeg.Error as e:
-            self.error = e.stderr.decode('utf8')
+            # 获取 static-ffmpeg 的可执行文件路径
+            ffmpeg_path, _ = static_ffmpeg.run.get_or_fetch_platform_executables_else_raise()
+            
+            # 构建 ffmpeg 命令
+            cmd = [
+                ffmpeg_path,
+                '-i', audio_file,
+                '-vn',  # 禁用视频
+                '-acodec', 'pcm_s16le',  # 16位PCM编码
+                '-ac', '1',  # 单声道
+                '-ar', '16000',  # 16kHz采样率
+                '-f', 'wav',  # WAV格式
+                '-y',  # 覆盖输出文件
+                self.output_path
+            ]
+            
+            # 使用 subprocess 运行命令
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                self.error = result.stderr
+        except Exception as e:
+            self.error = str(e)
 
     def cleanup(self):
         if os.path.exists(self.output_path):
