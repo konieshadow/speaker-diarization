@@ -1,6 +1,6 @@
 """
-说话人分离核心模块
-提供可复用的说话人分离功能，支持本地模型缓存和GPU优化
+Speaker diarization core module
+Provides reusable speaker diarization functionality with local model caching and GPU optimization
 """
 import os
 import torch
@@ -15,69 +15,69 @@ from .audio import AudioPreProcessor
 
 
 class SpeakerDiarizationCore:
-    """说话人分离核心类"""
+    """Speaker diarization core class"""
     
     def __init__(self, 
                  model_name: str = "pyannote/speaker-diarization-3.1",
                  use_gpu: bool = True,
                  enable_compile: bool = True):
         """
-        初始化说话人分离核心
+        Initialize speaker diarization core
         
         Args:
-            model_name: 模型名称
-            use_gpu: 是否使用GPU
-            enable_compile: 是否启用PyTorch编译优化
+            model_name: Model name
+            use_gpu: Whether to use GPU
+            enable_compile: Whether to enable PyTorch compilation optimization
         """
         self.model_name = model_name
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.enable_compile = enable_compile
         
-        # 初始化组件
+        # Initialize components
         self.diarization = None
         self.diarization_post = DiarizationPostProcessor()
         self.audio_pre = AudioPreProcessor()
         
-        # 设备信息
+        # Device information
         self.device = torch.device("cuda" if self.use_gpu else "cpu")
         
     def setup(self):
-        """加载预下载的模型"""
-        print("正在初始化说话人分离系统...")
+        """Load pre-downloaded model"""
+        print("Initializing speaker diarization system...")
         
-        # 初始化 static-ffmpeg
-        print("正在初始化 static-ffmpeg...")
+        # Initialize static-ffmpeg
+        print("Initializing static-ffmpeg...")
         try:
             ffmpeg_path, _ = static_ffmpeg.run.get_or_fetch_platform_executables_else_raise()
-            print(f"✅ static-ffmpeg 初始化完成: {ffmpeg_path}")
+            print(f"✅ static-ffmpeg initialization completed: {ffmpeg_path}")
         except Exception as e:
-            print(f"⚠️ static-ffmpeg 初始化失败: {e}")
-            raise RuntimeError(f"static-ffmpeg 初始化失败: {e}")
+            print(f"⚠️ static-ffmpeg initialization failed: {e}")
+            raise RuntimeError(f"static-ffmpeg initialization failed: {e}")
 
         with open('/app/hf_token', 'r') as f:
             hf_token = f.read().strip()
 
-            # 加载管道
-            print(f"正在加载说话人分离管道: {self.model_name}")
+            # Load pipeline
+            print(f"Loading speaker diarization pipeline: {self.model_name}")
             self.diarization = Pipeline.from_pretrained(
                 self.model_name,
                 use_auth_token=hf_token
             )
 
         if self.diarization is None:
-            raise RuntimeError("模型初始化失败，退出程序")
+            raise RuntimeError("Model initialization failed, exiting program")
         
-        # GPU 优化
+        # GPU optimization
         if self.use_gpu:
-            print(f"正在将管道移动到device: {self.device}")
+            print(f"Moving pipeline to device: {self.device}")
             self.diarization.to(self.device)
             
-            # 启用CUDA优化
+            # Enable CUDA optimization
             torch.backends.cuda.enable_flash_sdp(True)
             torch.backends.cudnn.benchmark = True
-            print("✅ GPU优化已启用")
+            print("✅ GPU optimization enabled")
         
-        print("✅ 说话人分离系统初始化完成!")
+        print("✅ Speaker diarization system initialization completed!")
 
     def process_audio_file(self, 
                           audio_path: str,
@@ -85,29 +85,29 @@ class SpeakerDiarizationCore:
                           min_speakers: Optional[int] = None,
                           max_speakers: Optional[int] = None) -> Dict[str, Any]:
         """
-        处理音频文件进行说话人分离
+        Process audio file for speaker diarization
         
         Args:
-            audio_path: 音频文件路径
-            num_speakers: 指定说话人数量
-            min_speakers: 最小说话人数量
-            max_speakers: 最大说话人数量
+            audio_path: Audio file path
+            num_speakers: Specified number of speakers
+            min_speakers: Minimum number of speakers
+            max_speakers: Maximum number of speakers
             
         Returns:
-            分离结果字典
+            Diarization result dictionary
         """
         if self.diarization is None:
-            raise RuntimeError("模型未初始化，请先调用setup()方法")
+            raise RuntimeError("Model not initialized, please call setup() method first")
             
-        # 预处理音频
-        print(f"正在预处理音频文件: {audio_path}")
+        # Preprocess audio
+        print(f"Preprocessing audio file: {audio_path}")
         self.audio_pre.process(audio_path)
 
         if self.audio_pre.error:
-            print(f"音频预处理错误: {self.audio_pre.error}")
+            print(f"Audio preprocessing error: {self.audio_pre.error}")
             result = self.diarization_post.empty_result()
         else:
-            # 构建参数
+            # Build parameters
             kwargs = {}
             if num_speakers is not None:
                 kwargs['num_speakers'] = num_speakers
@@ -116,17 +116,17 @@ class SpeakerDiarizationCore:
             if max_speakers is not None:
                 kwargs['max_speakers'] = max_speakers
                 
-            # 运行分离
+            # Run diarization
             result = self._run_diarization(**kwargs)
 
-        # 清理临时文件
+        # Clean up temporary files
         self.audio_pre.cleanup()
         
         return result
 
     def _run_diarization(self, **kwargs) -> Dict[str, Any]:
-        """运行说话人分离，支持参数传递"""
-        print('正在运行说话人分离...')
+        """Run speaker diarization with parameter support"""
+        print('Running speaker diarization...')
         
         with torch.inference_mode():
             diarization = self.diarization(
@@ -137,7 +137,7 @@ class SpeakerDiarizationCore:
         return self.diarization_post.process_v3(diarization)
 
     def get_device_info(self) -> Dict[str, Any]:
-        """获取设备信息"""
+        """Get device information"""
         return {
             "device": str(self.device),
             "cuda_available": torch.cuda.is_available(),

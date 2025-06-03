@@ -41,18 +41,18 @@ class DiarizationPostProcessor:
 
     def process_v3(self, diarization):
         """
-        处理 pyannote 3.x 版本的 diarization 结果
-        这个版本不需要单独的 embeddings 参数
+        Process pyannote 3.x version diarization results
+        This version doesn't require separate embeddings parameter
         """
-        print('正在后处理分离结果...')
-        # 创建新的标签生成器
+        print('Post-processing diarization results...')
+        # Create new label generator
         self.labels = SpeakerLabelGenerator()
 
-        # 处理分离结果
+        # Process diarization results
         clean_segments = self.clean_segments_v3(diarization)
         merged_segments = self.merge_segments(clean_segments)
 
-        # 创建最终输出
+        # Create final output
         segments = self.format_segments(merged_segments)
         speaker_count = self.labels.count
         speaker_labels = self.labels.get_all()
@@ -62,23 +62,23 @@ class DiarizationPostProcessor:
             "speakers": {
                 "count": speaker_count,
                 "labels": speaker_labels,
-                "embeddings": {},  # v3 版本暂时不提供 embeddings
+                "embeddings": {},  # v3 version doesn't provide embeddings for now
             },
         }
 
     def clean_segments_v3(self, diarization):
-        """为 v3 版本清理分段，不需要 embeddings"""
+        """Clean segments for v3 version, no embeddings needed"""
         speaker_time = collections.defaultdict(float)
         total_time = 0.0
         for segment, _, speaker in diarization.itertracks(yield_label=True):
-            # 过滤掉太短的分段
+            # Filter out segments that are too short
             if segment.duration < self.MIN_SEGMENT_DURATION:
                 continue
             speaker_time[speaker] += segment.duration
             total_time += segment.duration
 
-        # 过滤掉说话时间太少的说话人
-        # (这些可能是重叠部分被误分类为独立说话人)
+        # Filter out speakers with too little speaking time
+        # (these might be overlapping parts misclassified as independent speakers)
         speakers = set([
             speaker
             for speaker, time in speaker_time.items()
