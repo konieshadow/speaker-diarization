@@ -23,7 +23,7 @@ class Predictor(BasePredictor):
         self,
         audio: CogPath = Input(
             description="Audio file",
-            default="https://www.buzzsprout.com/2460059/episodes/16858633-coming-soon-things-bakers-know-the-king-arthur-baking-podcast.mp3"
+            default="https://r2.getcastify.com/lex_ai_john_carmack_1.wav"
         ),
         num_speakers: Optional[int] = Input(
             description="Number of speakers (if known)", 
